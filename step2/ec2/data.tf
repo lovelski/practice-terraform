@@ -22,12 +22,29 @@ data "aws_ami" "ubuntu" {
 
   filter {
     name   = "name"
-    values = [var.ami["name"]]
+    values = [var.ubuntu["name"]]
   }
 
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
   }
-  owners = [var.ami["owner"]]
+
+  owners = [var.ubuntu["owner"]]
+}
+
+data "aws_ami" "windows" {
+  most_recent = true
+
+  filter {
+    name   = "name"
+    values = [var.windows["name"]]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  owners = [var.windows["owner"]]
 }

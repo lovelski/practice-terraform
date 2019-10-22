@@ -22,7 +22,7 @@ resource "aws_security_group_rule" "demo_elasticstack_ssh" {
   from_port         = 22
   to_port           = 22
   protocol          = "TCP"
-  cidr_blocks       = ["0.0.0.0/0"]
+  cidr_blocks       = ["119.206.206.251/32"]
   security_group_id = aws_security_group.demo_elasticstack.id
 
   lifecycle { create_before_destroy = true }
@@ -33,7 +33,7 @@ resource "aws_security_group_rule" "demo_elasticstack_kibana" {
   from_port         = 5601
   to_port           = 5601
   protocol          = "TCP"
-  cidr_blocks       = ["0.0.0.0/0"]
+  cidr_blocks       = ["119.206.206.251/32"]
   security_group_id = aws_security_group.demo_elasticstack.id
 
   lifecycle { create_before_destroy = true }
@@ -56,6 +56,17 @@ resource "aws_security_group_rule" "demo_elasticstack_kibana_internal" {
   to_port           = 5601
   protocol          = "TCP"
   source_security_group_id = aws_security_group.demo.id
+  security_group_id = aws_security_group.demo_elasticstack.id
+
+  lifecycle { create_before_destroy = true }
+}
+
+resource "aws_security_group_rule" "demo_elasticstack_grafana_internal" {
+  type              = "ingress"
+  from_port         = 9200
+  to_port           = 9200
+  protocol          = "TCP"
+  source_security_group_id = aws_security_group.demo_grafana.id
   security_group_id = aws_security_group.demo_elasticstack.id
 
   lifecycle { create_before_destroy = true }

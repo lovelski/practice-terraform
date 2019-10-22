@@ -1,0 +1,77 @@
+resource "aws_instance" "demo_win" {
+  ami                  = data.aws_ami.windows.id
+  availability_zone    = data.aws_availability_zones.available.names[0]
+  key_name             = var.ec2["key_pair"]
+  instance_type        = var.ec2_demo["instance_type"]
+  vpc_security_group_ids = [
+    data.terraform_remote_state.sg_data.outputs.demo_sg_id,
+  ]
+
+  subnet_id             = data.terraform_remote_state.vpc_data.outputs.demo_public_subnet_1_id
+  associate_public_ip_address = true
+  user_data = <<EOF
+<script>
+  winrm quickconfig -q & winrm set winrm/config @{MaxTimeoutms="1800000"} & winrm set winrm/config/service @{AllowUnencrypted="true"} & winrm set winrm/config/service/auth @{Basic="true"}
+</script>
+<powershell>
+  netsh advfirewall firewall add rule name="WinRM in" protocol=TCP dir=in profile=any localport=5986 remoteip=any localip=any action=allow
+
+  # Set Administrator password
+  $admin = [adsi]("WinNT://./administrator, user")
+  $admin.psbase.invoke("SetPassword", "${var.ec2["password"]}")
+</powershell>
+  EOF
+
+  tags = {
+    Name = var.ec2_demo["name"]
+  }
+
+  connection {
+    type      = "winrm"
+    user      = "Administrator"
+    password  = var.ec2["password"]
+    timeout   = "10m"
+  }
+
+  provisioner "file" {
+    source      = "${path.module}/conf/metricbeat-7.4.0-windows-x86_64.zip"
+    destination = "C:\init\metricbeat-7.4.0-windows-x86_64.zip"
+  }
+
+  provisioner "file" {
+    source      = "${path.module}/conf/replace.ps1"
+    destination = "C:\init\replace.ps1"
+  }
+
+  provisioner "file" {
+    source      = "${path.module}/conf/unzip.ps1"
+    destination = "C:\init\unzip.ps1"
+  }
+
+  provisioner "file" {
+    source      = "${path.module}/conf/metricbeat.yml"
+    destination = "C:\init\metricbeat.yml"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sed -i 's/change-es-host/${aws_instance.demo_es.private_ip}/g' ~/metricbeat.yml",
+
+      "PowerShell.exe -ExecutionPolicy UnRestricted -File C:\init\replace.ps1 C:\init\metricbeat.yml change-es-host ${aws_instance.demo_es.private_ip}"
+
+      "sudo mv ~/metricbeat.yml /etc/metricbeat/metricbeat.yml",
+      "sudo chown root:root /etc/metricbeat/metricbeat.yml",
+      "sudo systemctl enable metricbeat.service",
+      "sudo service metricbeat start",
+      "sudo metricbeat setup --dashboards",
+
+      "PowerShell.exe -ExecutionPolicy UnRestricted -File C:\init\unzip.ps1 C:\init\metricbeat-7.4.0-windows-x86_64.zip C:\init\metricbeat"
+      "PowerShell.exe -ExecutionPolicy UnRestricted -File C:\init\metricbeat\install-service-metricbeat.ps1"
+      ".\metricbeat.exe modules enable apache mysql"
+
+      "sleep 20"
+    ]
+  }
+
+  depends_on = ["aws_instance.demo_es"]
+}
